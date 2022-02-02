@@ -1,0 +1,136 @@
+{
+  "functions": [
+    {
+      "name": "main",
+      "instrs": [
+        {
+          "op": "const",
+          "value": 3.2,
+          "dest": "v0",
+          "type": "float"
+        },
+        {
+          "op": "id",
+          "dest": "x",
+          "type": "float",
+          "args": [
+            "v0"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 2,
+          "dest": "v1",
+          "type": "int"
+        },
+        {
+          "op": "id",
+          "dest": "n",
+          "type": "int",
+          "args": [
+            "v1"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [],
+          "funcs": [
+            "f1"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 0,
+          "dest": "v2",
+          "type": "int"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "f1",
+      "instrs": [
+        {
+          "op": "call",
+          "args": [],
+          "funcs": [
+            "f2"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 0,
+          "dest": "v0",
+          "type": "int"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "f2",
+      "instrs": [
+        {
+          "op": "call",
+          "args": [],
+          "funcs": [
+            "f3"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 0,
+          "dest": "v0",
+          "type": "int"
+        },
+        {
+          "op": "call",
+          "args": [],
+          "funcs": [
+            "f4"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 0,
+          "dest": "v1",
+          "type": "int"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "f3",
+      "instrs": [
+        {
+          "op": "call",
+          "args": [],
+          "funcs": [
+            "f4"
+          ]
+        },
+        {
+          "op": "const",
+          "value": 0,
+          "dest": "v0",
+          "type": "int"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "f4",
+      "instrs": [],
+      "args": []
+    },
+    {
+      "name": "f5",
+      "instrs": [],
+      "args": []
+    },
+    {
+      "name": "f6",
+      "instrs": [],
+      "args": []
+    }
+  ]
+}

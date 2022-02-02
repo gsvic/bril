@@ -1,0 +1,3 @@
+command = "python cycle_detection.py < {filename}"
+output.out = "-"
+diff = "git --no-pager diff --no-index"
