@@ -59,6 +59,12 @@ export class GC {
         this.referenceCounts.set(key, count)
     }
 
+    removeReference(key: Key) {
+        if (this.referenceCounts.has(key)) {
+            this.referenceCounts.delete(key);
+        }
+    }
+
     decrementReference(key: Key) {
         let count = this.referenceCounts.get(key)
 
@@ -93,14 +99,14 @@ export class GC {
     }
 
     clean(state: State) {
-        console.log("cleaning stuff")
+        //console.log("cleaning stuff")
         let keys = this.referenceCounts.keys();
 
         let k = keys.next();
         while (!k.done) {
             let val = k.value;
             if (val != undefined) {
-                console.log("cleaning %s", val);
+                //console.log("cleaning %s", val);
                 state.heap.free(val);
                 this.referenceCounts.delete(val);
             }
@@ -373,6 +379,7 @@ type State = {
   readonly heap: Heap<Value>,
   readonly gc: GC,
   readonly gcenabled: boolean,
+  readonly disablefree: boolean,
   readonly funcs: readonly bril.Function[],
 
   // For profiling: a total count of the number of instructions executed.
@@ -425,6 +432,7 @@ function evalCall(instr: bril.Operation, state: State): Action {
     heap: state.heap,
     gc: state.gc,
     gcenabled: state.gcenabled,
+    disablefree: state.disablefree,
     funcs: state.funcs,
     icount: state.icount,
     lastlabel: null,
@@ -708,8 +716,11 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
   }
 
   case "free": {
-    let val = getPtr(instr, state.env, 0);
-    state.heap.free(val.loc);
+    if (!state.disablefree) {
+        let val = getPtr(instr, state.env, 0);
+        state.heap.free(val.loc);
+        state.gc.removeReference(val.loc);
+    }
     return NEXT;
   }
 
@@ -939,7 +950,12 @@ function evalProg(prog: bril.Program) {
     args.splice(usegcidx, 1);
   }
 
-  console.log("gc: %s", usegc);
+  let disablefree = false
+  let dfidx = args.indexOf('-df');
+  if (dfidx > -1) {
+    disablefree = true;
+    args.splice(dfidx, 1);
+  }
 
   // Remaining arguments are for the main function.k
   let expected = main.args || [];
@@ -950,6 +966,7 @@ function evalProg(prog: bril.Program) {
     heap,
     gc,
     gcenabled: usegc,
+    disablefree: disablefree,
     env: newEnv,
     icount: BigInt(0),
     lastlabel: null,
