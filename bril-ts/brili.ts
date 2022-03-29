@@ -39,6 +39,78 @@ export class Key {
     }
 }
 
+export class GC {
+    private readonly referenceCounts: Map<Key, number>
+
+    constructor() {
+        this.referenceCounts = new Map()
+    }
+
+    addReference(key: Key) {
+        let count = this.referenceCounts.get(key)
+
+        if (typeof count == 'undefined') {
+            count = 1;
+        }
+        else {
+            count += 1;
+        }
+
+        this.referenceCounts.set(key, count)
+    }
+
+    decrementReference(key: Key) {
+        let count = this.referenceCounts.get(key)
+
+        if (typeof count == 'undefined') {
+            count = 1;
+        }
+        else {
+            count -= 1;
+        }
+
+        this.referenceCounts.set(key, count)
+
+        return count;
+    }
+
+    handleAssignment(dst: string, state: State, pointer: Pointer) {
+        // Check if exists
+        let exists = state.env.get(dst);
+
+        if (typeof exists != "undefined" && exists.hasOwnProperty("loc")) {
+            // We need to decrement
+            let c = this.decrementReference((exists as Pointer).loc);
+
+            if (c == 0) {
+                let loc = (exists as Pointer).loc
+                state.heap.free(loc);
+                this.referenceCounts.delete(loc);
+            }
+        }
+
+        this.addReference(pointer.loc);
+    }
+
+    clean(state: State) {
+        console.log("cleaning stuff")
+        let keys = this.referenceCounts.keys();
+
+        let k = keys.next();
+        while (!k.done) {
+            let val = k.value;
+            if (val != undefined) {
+                console.log("cleaning %s", val);
+                state.heap.free(val);
+                this.referenceCounts.delete(val);
+            }
+
+            k = keys.next();
+        }
+    }
+
+}
+
 /**
  * A Heap maps Keys to arrays of a given type.
  */
@@ -299,6 +371,8 @@ let NEXT: Action = {"action": "next"};
 type State = {
   env: Env,
   readonly heap: Heap<Value>,
+  readonly gc: GC,
+  readonly gcenabled: boolean,
   readonly funcs: readonly bril.Function[],
 
   // For profiling: a total count of the number of instructions executed.
@@ -349,6 +423,8 @@ function evalCall(instr: bril.Operation, state: State): Action {
   let newState: State = {
     env: newEnv,
     heap: state.heap,
+    gc: state.gc,
+    gcenabled: state.gcenabled,
     funcs: state.funcs,
     icount: state.icount,
     lastlabel: null,
@@ -436,6 +512,11 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
 
   case "id": {
     let val = getArgument(instr, state.env, 0);
+
+    if (state.gcenabled) {
+        state.gc.handleAssignment(instr.dest, state, (val as Pointer))
+    }
+
     state.env.set(instr.dest, val);
     return NEXT;
   }
@@ -617,6 +698,11 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
       throw error(`cannot allocate non-pointer type ${instr.type}`);
     }
     let ptr = alloc(typ, Number(amt), state.heap);
+
+    if (state.gcenabled) {
+        state.gc.handleAssignment(instr.dest, state, ptr);
+    }
+
     state.env.set(instr.dest, ptr);
     return NEXT;
   }
@@ -828,7 +914,9 @@ function parseMainArguments(expected: bril.Argument[], args: string[]) : Env {
 }
 
 function evalProg(prog: bril.Program) {
-  let heap = new Heap<Value>()
+  let heap = new Heap<Value>();
+  let gc = new GC();
+
   let main = findFunc("main", prog.functions);
   if (main === null) {
     console.warn(`no main function defined, doing nothing`);
@@ -844,6 +932,15 @@ function evalProg(prog: bril.Program) {
     args.splice(pidx, 1);
   }
 
+  let usegc = false
+  let usegcidx = args.indexOf('-gc');
+  if (usegcidx > -1) {
+    usegc = true;
+    args.splice(usegcidx, 1);
+  }
+
+  console.log("gc: %s", usegc);
+
   // Remaining arguments are for the main function.k
   let expected = main.args || [];
   let newEnv = parseMainArguments(expected, args);
@@ -851,6 +948,8 @@ function evalProg(prog: bril.Program) {
   let state: State = {
     funcs: prog.functions,
     heap,
+    gc,
+    gcenabled: usegc,
     env: newEnv,
     icount: BigInt(0),
     lastlabel: null,
@@ -858,6 +957,10 @@ function evalProg(prog: bril.Program) {
     specparent: null,
   }
   evalFunc(main, state);
+
+  if (usegc) {
+    state.gc.clean(state);
+  }
 
   if (!heap.isEmpty()) {
     throw error(`Some memory locations have not been freed by end of execution.`);
