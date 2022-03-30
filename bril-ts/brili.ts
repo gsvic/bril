@@ -68,14 +68,10 @@ export class GC {
     decrementReference(key: Key) {
         let count = this.referenceCounts.get(key)
 
-        if (typeof count == 'undefined') {
-            count = 1;
-        }
-        else {
+        if (typeof count != 'undefined') {
             count -= 1;
+            this.referenceCounts.set(key, count);
         }
-
-        this.referenceCounts.set(key, count)
 
         return count;
     }
@@ -716,8 +712,8 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
   }
 
   case "free": {
+    let val = getPtr(instr, state.env, 0);
     if (!state.disablefree) {
-        let val = getPtr(instr, state.env, 0);
         state.heap.free(val.loc);
         state.gc.removeReference(val.loc);
     }
