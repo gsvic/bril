@@ -1,0 +1,12 @@
+# ARGS: live
+
+@main {
+  a: int = const 16;
+
+  c1: ptr<int> = alloc a;
+  c2: ptr<int> = alloc a;
+  c3: ptr<int> = id c1;
+  c4: ptr<int> = id c3;
+
+  ret;
+}
