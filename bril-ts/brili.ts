@@ -2,6 +2,9 @@
 import * as bril from './bril';
 import {readStdin, unreachable} from './util';
 
+// Number of function calls that make a function "hot"
+let hotLimit: number = 5;
+
 /**
  * An interpreter error to print to the console.
  */
@@ -111,6 +114,83 @@ export class GC {
         }
     }
 
+}
+
+export class Tracer {
+    private readonly trace: Map<string, Array<bril.Instruction>>;
+    private readonly functionCalls: Map<string, number>
+    private readonly traced: Set<String>
+    private readonly hotLimit: number;
+    private active: boolean;
+    private nowTracing: string;
+
+    constructor(hotLimit: number) {
+        this.active = false;
+        this.hotLimit = hotLimit;
+        this.functionCalls = new Map();
+        this.traced = new Set();
+        this.trace = new Map();
+        this.nowTracing = "";
+    }
+
+    addFunctionCall(name: string) {
+        let count = this.functionCalls.get(name)
+
+        if (typeof count == 'undefined') {
+            count = 1;
+        }
+        else {
+            count += 1;
+        }
+
+        this.functionCalls.set(name, count)
+    }
+
+    isHot(name: string) {
+        let count = this.functionCalls.get(name)
+
+        if (typeof count != 'undefined') {
+            return count >= this.hotLimit;
+        }
+
+        return false;
+    }
+
+    isTraced(name: String) {
+        return this.traced.has(name);
+    }
+
+    traceInstr(instr: bril.Instruction) {
+        let funcTrace = this.trace.get(this.nowTracing)
+
+        if (typeof funcTrace != 'undefined') {
+            return funcTrace.push(instr);
+        }
+    }
+
+    completeTracing(name: string) {
+        this.traced.add(name);
+    }
+
+    isActive() {
+        return this.active;
+    }
+
+    activate(name: string) {
+        this.active = true;
+        this.nowTracing = name;
+        this.trace.set(name, new Array<bril.Instruction>());
+    }
+
+    deactivate() {
+        this.active = false;
+        this.traced.add(this.nowTracing);
+        this.nowTracing = "";
+    }
+
+    printTrace() {
+        console.log(JSON.stringify(Array.from(this.trace.entries()), null, 2));
+    }
 }
 
 /**
@@ -374,8 +454,10 @@ type State = {
   env: Env,
   readonly heap: Heap<Value>,
   readonly gc: GC,
+  readonly tracer: Tracer,
   readonly gcenabled: boolean,
   readonly disablefree: boolean,
+  readonly tracerenabled: boolean,
   readonly funcs: readonly bril.Function[],
 
   // For profiling: a total count of the number of instructions executed.
@@ -427,15 +509,35 @@ function evalCall(instr: bril.Operation, state: State): Action {
     env: newEnv,
     heap: state.heap,
     gc: state.gc,
+    tracer: state.tracer,
     gcenabled: state.gcenabled,
     disablefree: state.disablefree,
+    tracerenabled: state.tracerenabled,
     funcs: state.funcs,
     icount: state.icount,
     lastlabel: null,
     curlabel: null,
     specparent: null,  // Speculation not allowed.
   }
+
+  if (state.tracerenabled && !state.tracer.isTraced(funcName)) {
+    // Increase the function calls count by one
+    state.tracer.addFunctionCall(funcName);
+
+    // If the function became hot, activate the tracer
+    if (state.tracer.isHot(funcName)) {
+        state.tracer.activate(funcName);
+    }
+  }
+
   let retVal = evalFunc(func, newState);
+
+  if (state.tracerenabled && state.tracer.isActive()) {
+    // Deactivate the tracer
+    state.tracer.deactivate();
+    state.tracer.completeTracing(funcName);
+  }
+
   state.icount = newState.icount;
 
   // Dynamically check the function's return value and type.
@@ -480,6 +582,10 @@ function evalCall(instr: bril.Operation, state: State): Action {
  */
 function evalInstr(instr: bril.Instruction, state: State): Action {
   state.icount += BigInt(1);
+
+  if (state.tracer.isActive()) {
+    state.tracer.traceInstr(instr);
+  }
 
   // Check that we have the right number of arguments.
   if (instr.op !== "const") {
@@ -923,6 +1029,7 @@ function parseMainArguments(expected: bril.Argument[], args: string[]) : Env {
 function evalProg(prog: bril.Program) {
   let heap = new Heap<Value>();
   let gc = new GC();
+  let tracer = new Tracer(hotLimit);
 
   let main = findFunc("main", prog.functions);
   if (main === null) {
@@ -953,6 +1060,13 @@ function evalProg(prog: bril.Program) {
     args.splice(dfidx, 1);
   }
 
+  let enabletracing = false
+  let tridx = args.indexOf('-tr');
+  if (tridx > -1) {
+    enabletracing = true;
+    args.splice(tridx, 1);
+  }
+
   // Remaining arguments are for the main function.k
   let expected = main.args || [];
   let newEnv = parseMainArguments(expected, args);
@@ -961,8 +1075,10 @@ function evalProg(prog: bril.Program) {
     funcs: prog.functions,
     heap,
     gc,
+    tracer,
     gcenabled: usegc,
     disablefree: disablefree,
+    tracerenabled: enabletracing,
     env: newEnv,
     icount: BigInt(0),
     lastlabel: null,
@@ -981,6 +1097,10 @@ function evalProg(prog: bril.Program) {
 
   if (profiling) {
     console.error(`total_dyn_inst: ${state.icount}`);
+  }
+
+  if (state.tracerenabled) {
+    console.log(state.tracer.printTrace());
   }
 
 }
