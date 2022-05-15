@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as bril from './bril';
+import * as fs from 'fs';
 import {readStdin, unreachable} from './util';
 
 // Number of function calls that make a function "hot"
@@ -188,8 +189,20 @@ export class Tracer {
         this.nowTracing = "";
     }
 
+    getTraceStr(): String {
+        return JSON.stringify(Array.from(this.trace.entries()), null, 2);
+    }
+
     printTrace() {
-        console.log(JSON.stringify(Array.from(this.trace.entries()), null, 2));
+        console.log(this.getTraceStr());
+    }
+
+    dumpTraceToFile() {
+        fs.writeFile('trace.json', this.getTraceStr(),  function(err) {
+            if (err) {
+                return console.error(err);
+            }
+        });
     }
 }
 
@@ -1100,7 +1113,7 @@ function evalProg(prog: bril.Program) {
   }
 
   if (state.tracerenabled) {
-    console.log(state.tracer.printTrace());
+    state.tracer.dumpTraceToFile();
   }
 
 }
