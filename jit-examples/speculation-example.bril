@@ -1,0 +1,48 @@
+@f1(i: int):int {
+    five: int = const 5;
+    tmp: int = add i five;
+
+    ret tmp;
+}
+
+@f2(i: int):int {
+    five: int = const 5;
+    tmp: int = add i five;
+
+    ret tmp;
+}
+
+@main{
+    b: boolean = const true;
+
+    v: int = const 4;
+    to_add: int = const 6;
+
+    speculate;
+    v: int = add v to_add;
+    print v;
+    guard b .failed;
+    commit;
+
+    .failed:
+
+    r : int = call @f1 v;
+    r : int = call @f1 v;
+    r : int = call @f1 v;
+    r : int = call @f1 v;
+    r : int = call @f1 v;
+    r : int = call @f1 v;
+
+    r3: int = call @f1 v;
+
+    r : int = call @f2 v;
+    r1: int = call @f2 v;
+    r1: int = call @f2 v;
+    r1: int = call @f2 v;
+    r1: int = call @f2 v;
+    r1: int = call @f2 v;
+    r1: int = call @f2 v;
+
+
+    print r;
+}

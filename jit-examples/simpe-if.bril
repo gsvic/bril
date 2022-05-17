@@ -1,0 +1,37 @@
+@ph(x: int): int {
+    one: int = const 1;
+    res: int = id x;
+    cond: int = const 20;
+
+    b: boolean = lt res cond;
+
+    br b .if .else;
+
+    .if:
+        res = add res one;
+    .else:
+
+    ret res;
+}
+
+@main{
+    one: int = const 1;
+    i: int = const 1;
+    res: int = const 0;
+
+    cond: int = const 10;
+
+    .loop:
+        b: boolean = lt res cond;
+        br b .while .end;
+    .while:
+        i: int = add i one;
+        b: boolean = lt i cond;
+
+        res: int = call @ph res;
+
+        jmp .loop;
+
+    .end:
+        print res;
+}
